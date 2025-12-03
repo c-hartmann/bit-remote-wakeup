@@ -1,6 +1,6 @@
 # bit-remote-wakeup
 
-A so named User Callback Script for Back In Time.
+A so called 'User Callback Script' for 'Back In Time'.
 
 ## Install
 
@@ -20,7 +20,7 @@ if you are using the ```user-callback.multiple-scripts``` script.
 
 ## Note
 
-Back In Time only calls one script:
+Back In Time calls one script only:
 
 ```
 $HOME/.config/backintime/user-callback
