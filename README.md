@@ -2,6 +2,10 @@
 
 A so called 'User Callback Script' for 'Back In Time'.
 
+## Warning
+
+Status is WIP and WFM only!
+
 ## Install
 
 Copy file either as ```user-callback``` into folder:
