@@ -1,0 +1,317 @@
+#!/bin/bash
+
+# SEE:
+# https://github.com/bit-team/backintime/blob/dev/doc/manual/src/user-callback.md
+# https://github.com/bit-team/backintime/blob/dev/doc/user-callback-examples/user-callback.default
+
+# TODO:
+# - extract values from profile:
+# profile_mode= # should be "SSH" or "SSH encrypted" - *not* "Local"
+# profile_ssh_host=
+
+# /usr/sbin/etherwake: invalid option -- 'h'
+# usage: etherwake [-i <ifname>] [-p aa:bb:cc:dd[:ee:ff]] 00:11:22:33:44:55
+#    Use '-u' to see the complete set of options.
+
+XDG_CONFIG_DIR="${XDG_CONFIG_DIR:-$HOME/.config}"
+BIT_CONFIG_DIR="${XDG_CONFIG_DIR}/backintime"
+BIT_CONFIG_FILE="${BIT_CONFIG_DIR}/config"
+
+# get directory i'm living in, look for a config file there and execute if it exists
+ME=${BASH_SOURCE[0]%.*sh}
+ME_CONFIG="${ME}.conf"
+if [[ -f "${ME_CONFIG}" ]]; then
+ 	set -x
+	. "${ME_CONFIG}"
+ 	set +x
+fi
+
+
+BIT_USER_CALLBACK_SCRIPT_NAME="BackInTime Wake-Up Call"
+
+# get some default command tools from installation
+
+_default_notify_command_avails=( $(type -p notify-send kdialog gdbus zenity dunstify) )
+_default_notify_comamnd="${_default_notify_command_avails[0]}"
+
+_default_wakeup_command_avails=( $(type -p etherwake wakeonlan) )
+_default_wakeup_comamnd="${_default_wakeup_command_avails[0]}"
+
+BIT_RSYNC_TARGET_NOTIFY_COMMAND="${BIT_RSYNC_TARGET_NOTIFY_COMMAND:-$_default_notify_comamnd}"
+BIT_RSYNC_TARGET_WAKEUP_COMMAND="${BIT_RSYNC_TARGET_WAKEUP_COMMAND:-"$_default_wakeup_comamnd"}"
+
+
+# TODO:
+# priorizize these if configured over bit config?
+BIT_RSYNC_TARGET_HOST_NAME="${BIT_RSYNC_TARGET_HOST_NAME:-'mynas'}"
+BIT_RSYNC_TARGET_HOST_IP="${BIT_RSYNC_TARGET_HOST_IP:-'127.0.0.1'}"
+BIT_RSYNC_TARGET_HOST_MAC="${BIT_RSYNC_TARGET_HOST_MAC:-'00:11:22:33:44:55'}"
+
+# currently not used
+# BIT_RSYNC_TARGET_WAKEUP_WAIT_TIME=${BIT_RSYNC_TARGET_WAKEUP_WAIT_TIME:-10}
+
+# if we can ping we do not wake up
+BIT_RSYNC_TARGET_PING_COUNT=1
+
+
+
+function __get_ip_of_hostname()
+{
+  :
+}
+
+# SEE:
+# https://www.cyberciti.biz/faq/linux-ip-command-examples-usage-syntax/#10
+function __get_mac_of_ip()
+{
+  local _ip="$1"
+  ip neighbour | grep "^${_ip} " | awk '{ print $5 }'
+}
+
+function __wake_up_of_mac()
+{
+  :
+}
+
+function __get_user_ack()
+{
+	kdialog "Wake up device and back up to it?"
+	return $?
+}
+
+# function is_remote_profile()
+# {
+#		[[ "$1" =~ ^.*NAS.*$ ]] && return 0
+#		[[ "$1" =~ ^.*RSYNC.*$ ]] && return 0
+#		[[ "$1" =~ ^.*REMOTE.*$ ]] && return 0
+#		return 1
+# }
+
+# function __get_profile_mode()
+# {
+# 	local _id="$1"
+# 	_line="$(grep "^profile${_id}.snapshots.mode" "${BIT_CONFIG_FILE}")"
+# 	printf '%s' "${_line#*=}"
+# }
+
+function __get_profile_id_of_name()
+{
+	local _profile_name="$1"
+	local _line=$(grep -e "name=${_profile_name}$" "${BIT_CONFIG_FILE}")
+	# > profile3.name=Kleine Sicherung
+	local _return="${line##.name*}"
+	local _profile_id="${_return%%profile}"
+	printf '%s' "${_profile_id}"
+}
+
+function __get_snapshot_mode_of_profile_name()
+{
+	local _profile_name="$1"
+	local _profile_id=$(get_profile_id_of_name "${_profile_name}")
+	local _profile_mode="$(get_snapshot_mode_of_profile_id)"
+	printf '%s' "${_profile_mode}"
+}
+
+function __get_snapshot_mode_of_profile_id()
+{
+	local _profile_id=$1
+	# get from like: profile1.snapshots.mode=local
+	local _line="$(grep -e "^profile${_profile_id}\.snapshots\.mode=" "${BIT_CONFIG_FILE}")"
+	local _snapshot_mode="${_line#*.mode=}"
+	printf '%s' "${_snapshot_mode}"
+}
+
+function __get_profile_name_of_profile_id()
+{
+	local _profile_id=$1
+	# get from like: profile1.snapshots.mode=local
+	local _line="$(grep -e "^profile${_profile_id}\.name=" "${BIT_CONFIG_FILE}")"
+	local _profile_name="${_line#*.name=}"
+	printf '%s' "${_profile_name}"
+}
+
+function __get_snapshot_ssh_host_of_profile_id()
+{
+	local _profile_id=$1
+	# get from like: profile5.snapshots.ssh.host=192.168.178.110
+	local _line="$(grep -e "^profile${_profile_id}\.snapshots\.ssh\.host=" "${BIT_CONFIG_FILE}")"
+	local _snapshot_host="${_line#*ssh.host=}"
+	printf '%s' "${_snapshot_host}"
+}
+
+function __notify()
+{
+	local _message="$1"
+	local _body="$2"
+	case $BIT_RSYNC_TARGET_NOTIFY_COMMAND in
+		xdialog )
+			:
+		;;
+		gdialog )
+			:
+		;;
+		kdialog )
+			kdialog \
+			--title "$BIT_USER_CALLBACK_SCRIPT_NAME" \
+			--passivepopup \
+			"$_message $_body"
+		;;
+		zenity )
+			zenity \
+			  --notification \
+			  --text "$_message $_body"
+		;;
+		notify-send )
+			notify-send --app-name="$BIT_USER_CALLBACK_SCRIPT_NAME" "$_message" "$_body"
+		;;
+		yad )
+			:
+		;;
+		dunstify )
+			:
+		;;
+		qdbus )
+			# all we get is: Invalid number of parameters
+# 			qdbus6 org.freedesktop.Notifications /org/freedesktop/Notifications org.freedesktop.Notifications.Notify 'appname' '0' 'info' "$_message" "$_body"
+		;;
+		gdbus )
+			# WARNING: Not tested
+			# found here: https://gist.github.com/ageldama/d01c67208249c1f6980e894125042973
+			gdbus call --session \
+			  --dest=org.freedesktop.Notifications \
+			  --object-path=/org/freedesktop/Notifications \
+			  --method=org.freedesktop.Notifications.Notify \
+			  "" \
+			  0 \
+			  "info" \
+			  "$_message" \
+			  "$_body"
+		;;
+		* )
+			# WARNING: Not tested
+			# found here:
+			# https://gist.github.com/ageldama/d01c67208249c1f6980e894125042973
+			# SEE ALSO:
+			# https://specifications.freedesktop.org/notification/1.3/protocol.html#command-notify
+			# > Syntax probably unsufficient
+			dbus-send --session \
+			  --dest=org.freedesktop.Notifications \
+			  --type=method_call --print-reply \
+			  /org/freedesktop/Notifications \
+			  org.freedesktop.Notifications.Notify \
+			  string:"$_message" \
+			  string:"$_body"
+		;;
+	esac
+}
+
+
+bit_profile_id=${1:-1}
+bit_profile_name="${2:-profile1}"
+bit_callback_reason=${3:-1} # this aims for '1' (is about to start)
+
+case ${bit_callback_reason} in
+
+    1 ) # Backup process begins
+
+		_profile_name=$(__get_profile_name_of_profile_id ${bit_profile_id})
+		echo profile_name=$_profile_name >&2
+
+		# profile snapshot mode shall be 'ssh'
+		_profile_mode="$(__get_snapshot_mode_of_profile_id ${bit_profile_id})"
+		if [[ $_profile_mode != 'ssh' ]]; then
+			__notify "Not a remote profile mode: '$_profile_mode'"
+			# although this looks like an error, we shall exit clean or snapshot will not be taken
+			exit 0
+		fi
+		echo profile_mode=$_profile_mode >&2
+
+		# we shall have a valid ip addr of ssh host
+		_ssh_host="$(__get_snapshot_ssh_host_of_profile_id ${bit_profile_id})"
+		echo ssh_host=$_ssh_host >&2
+
+		# do nothing here (i.e. wake up) if host is already online
+		# NOTE also: some hosts wake up by ping already
+ 		if ping -c${BIT_RSYNC_TARGET_PING_COUNT:-1} $_ssh_host >/dev/null 2>&1; then
+			__notify "No need to wake up" "remote host is alive: $_ssh_host"
+			exit 0
+		fi
+
+		# TODO: should we fallback on configured IP?
+
+		_ssh_host_mac_addr="$(__get_mac_of_ip ${_ssh_host})"
+		echo mac_addr=$_ssh_host_mac_addr >&2
+
+		# inform user to be patient and wake up if we have all parameters
+		case $BIT_RSYNC_TARGET_WAKEUP_COMMAND in
+			etherwake | wakeonlan )
+				if [[ -z "$_ssh_host_mac_addr" ]]; then
+					__notify "Unable to determine MAC address of remote host:" "$_ssh_host"
+					exit 1
+				else
+					__notify "Waking up host:" "$_ssh_host ..."
+					$BIT_RSYNC_TARGET_WAKEUP_COMMAND $_ssh_host_mac_addr
+				fi
+			;;
+			virsh )
+# 				https://github.com/ScottESanDiego/virtwold
+				:
+			;;
+			VBoxManage | vboxmanage )
+				# TODO
+				# shall we start the VM instead?
+				$BIT_RSYNC_TARGET_WAKEUP_COMMAND 'controlvm' "${_ssh_host:-$BIT_RSYNC_TARGET_HOST_NAME}" 'acpisleepbutton'
+			;;
+			* )
+				__notify "Unsupported notification command:" "$BIT_RSYNC_TARGET_WAKEUP_COMMAND"
+			;;
+		esac
+	  ;;
+	2 ) # Backup process ends
+	  ;;
+	3 ) # A new backup was taken
+		snapshot_id=$4
+		snapshot_name="$5"
+	  ;;
+	4 ) # There was an error
+		bit_error_code=$4
+		case $bit_error_code in
+			1 ) # ERROR The application is not configured
+				:
+			;;
+			2 ) # ERROR A 'take backup' process is already running
+				:
+			;;
+			3 ) # ERROR Can't find backup directory (is it on removable drive ?)
+				:
+			;;
+			4 ) # ERROR A backup for 'now' already exist
+				:
+			;;
+			5 ) # ERROR: Error while taking a backup
+				:
+			;;
+			6 ) # ERROR: New backup taken but with errors
+				:
+			;;
+			* ) # Unknown error number
+				:
+			;;
+		esac
+		;;
+	5 ) # backintime-qt (GUI) started
+		:
+	;;
+	6 ) # backintime-qt (GUI) closed
+		:
+	;;
+	7 ) # Mount drives
+		:
+	;;
+	8 ) # Unmount the drives
+		:
+	;;
+
+esac
+
+exit 0
