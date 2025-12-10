@@ -1,6 +1,6 @@
 # bit-remote-wakeup
 
-A so called 'User Callback Script' for 'Back In Time' to Wake (up) on LAN a remote system before taking the actual backup.
+A so called 'User Callback Script' for 'Back in Time' to Wake (up) on LAN a remote system before taking the actual backup.
 
 ## Warning
 
@@ -38,4 +38,4 @@ Back In Time calls **one** script only:
 $HOME/.config/backintime/user-callback
 ```
 
-You have to either rename any script or link to it.
+You have to either to rename any script or link to it.
