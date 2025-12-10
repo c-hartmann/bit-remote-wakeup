@@ -14,17 +14,25 @@ Copy file either as ```user-callback``` into folder:
 $HOME/.config/backintime/
 ```
 
-or as ```user-callback.remote_wakeup``` into:
+or
+
+(if you are using the
+[```user-callback.multiple-scripts```](https://github.com/bit-team/user-callback/blob/master/user-callback.multiple-scripts)
+script)
+
+as
+```user-callback.remote_wakeup```
+into:
+
 
 ```
 $HOME/.config/backintime/user-callback.d/
 ```
 
-if you are using the ```user-callback.multiple-scripts``` script.
 
 ## Note
 
-Back In Time calls one script only:
+Back In Time calls **one** script only:
 
 ```
 $HOME/.config/backintime/user-callback
